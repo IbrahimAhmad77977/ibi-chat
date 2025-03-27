@@ -8,7 +8,7 @@ const newContactSchema = z.object({
 	email: z.string().email(),
 	password: z.string().min(8)
 });
-
+// test
 export const load = async () => {
 	const form = await superValidate(zod(newContactSchema));
 	return { form };
