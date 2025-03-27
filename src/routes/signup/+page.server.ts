@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { zod } from 'sveltekit-superforms/adapters';
 
 const newContactSchema = z.object({
-	username: z.string().min(1),
+	username: z.string().min(8),
 	email: z.string().email(),
 	password: z.string().min(8)
 });
