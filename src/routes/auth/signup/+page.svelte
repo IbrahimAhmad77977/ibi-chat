@@ -1,7 +1,5 @@
 <script >
 
-	// Add any necessary script here
-	//  responsiveness + design + redirections
   </script>
   
   <div class="min-h-screen flex justify-center items-center bg-gray-100">
