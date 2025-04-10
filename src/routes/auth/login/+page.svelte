@@ -1,29 +1,41 @@
-<div class="min-h-screen flex justify-center items-center bg-gray-100">
-	<form method="POST" action="?/login" class="flex flex-col justify-center items-center max-w-xl w-full p-10 bg-white shadow-xl rounded-lg border border-gray-200">
-	  
-	  <h2 class="text-3xl font-semibold text-gray-800 mb-6">Log In</h2>
-  
-	  <label class="w-full mb-6">
-		<span class="block text-lg font-medium text-gray-700 mb-1">Email</span>
-		<input name="email" type="email" required 
-		  class="mt-2 p-4 w-full border border-gray-300 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500 transition duration-300" />
-	  </label>
-	  
-	  <label class="w-full mb-6">
-		<span class="block text-lg font-medium text-gray-700 mb-1">Password</span>
-		<input name="password" type="password" required 
-		  class="mt-2 p-4 w-full border border-gray-300 rounded-xl text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500 transition duration-300" />
-	  </label>
-  
-	  <button formaction="?/login" 
-		class="w-full py-3 bg-green-600 text-white font-semibold rounded-xl hover:bg-green-500 focus:outline-none focus:ring-2 focus:ring-green-500 transition duration-200">
-		Log In
-	  </button>
-  
-	  <p class="mt-6 text-center text-gray-600 text-sm">
-		Want to create a new account? 
-		<a href="/auth/signup" class="text-green-500 hover:underline font-medium">Sign up</a>
-	  </p>
+<div class="flex min-h-screen items-center justify-center bg-gray-100">
+	<form
+		method="POST"
+		action="?/login"
+		class="flex w-full max-w-xl flex-col items-center justify-center rounded-lg border border-gray-200 bg-white p-10 shadow-xl"
+	>
+		<h2 class="mb-6 text-3xl font-semibold text-gray-800">Log In</h2>
+
+		<label class="mb-6 w-full">
+			<span class="mb-1 block text-lg font-medium text-gray-700">Email</span>
+			<input
+				name="email"
+				type="email"
+				required
+				class="mt-2 w-full rounded-xl border border-gray-300 p-4 text-gray-800 transition duration-300 focus:ring-2 focus:ring-green-500 focus:outline-none"
+			/>
+		</label>
+
+		<label class="mb-6 w-full">
+			<span class="mb-1 block text-lg font-medium text-gray-700">Password</span>
+			<input
+				name="password"
+				type="password"
+				required
+				class="mt-2 w-full rounded-xl border border-gray-300 p-4 text-gray-800 transition duration-300 focus:ring-2 focus:ring-green-500 focus:outline-none"
+			/>
+		</label>
+
+		<button
+			formaction="?/login"
+			class="w-full rounded-xl bg-green-600 py-3 font-semibold text-white transition duration-200 hover:bg-green-500 focus:ring-2 focus:ring-green-500 focus:outline-none"
+		>
+			Log In
+		</button>
+
+		<p class="mt-6 text-center text-sm text-gray-600">
+			Want to create a new account?
+			<a href="/auth/signup" class="font-medium text-green-500 hover:underline">Sign up</a>
+		</p>
 	</form>
-  </div>
-  
+</div>
