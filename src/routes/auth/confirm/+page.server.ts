@@ -19,18 +19,7 @@ export const GET: RequestHandler = async ({ url, locals: { supabase } }) => {
 			redirectTo.searchParams.delete('next');
 			throw redirect(303, redirectTo.toString());
 		} else {
-			const errorMap: Record<string, string> = {
-				'Invalid login credentials': 'Invalid login credentials. Please try again.',
-				'User already registered': 'User already exists. Try logging in instead.',
-				'Invalid token': 'The confirmation link is invalid or has expired.',
-				'Token has expired or already been used': 'This link has expired or already been used.'
-			};
-
-			const displayMessage =
-				errorMap[error.message] ?? 'An unexpected error occurred. Please try again later.';
-
 			const errorRedirect = new URL('/auth/error', url);
-			errorRedirect.searchParams.set('message', displayMessage);
 
 			throw redirect(303, errorRedirect.toString());
 		}

@@ -7,3 +7,9 @@ type User = {
     email: string;
   };
   
+  declare namespace App {
+    interface Locals {
+      errorMessage: string; // Define the errorMessage property on locals
+    }
+  }
+  
