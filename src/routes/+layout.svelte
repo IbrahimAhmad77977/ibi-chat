@@ -1,7 +1,7 @@
 <script>
 	import { invalidate } from '$app/navigation';
 	import { onMount } from 'svelte';
-
+	import '../app.css';
 	let { data, children } = $props();
 	console.log('this is the data for the page: ', data);
 
