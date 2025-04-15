@@ -3,20 +3,7 @@ import type { Actions } from './$types';
 import { supabaseClient } from '$lib/supabase';
 import type { RequestEvent } from '@sveltejs/kit';
 
-// You can define the type for 'locals' as per your application's needs
-interface Locals {
-    user?: {
-        username: string;
-        email: string;
-    };
-}
-
-
-
 export async function load({ locals, url }: RequestEvent) {
-	const user = locals.user;
-    const pathname = url.pathname;
-
 	const { data: userData } = await locals.supabase.auth.getUser();
 	const userEmail = userData?.user?.email;
 
@@ -30,39 +17,62 @@ export async function load({ locals, url }: RequestEvent) {
 
 	const username = accountData?.username;
 
-	const { data: accountsdata, error: accountsError } = await supabaseClient
-		.from('accounts')
-		.select();
+	// Fetch users the current user has exchanged messages with
+	const { data: messagedUsernamesData, error: convoError } = await supabaseClient
+		.from('messages')
+		.select('sender, receiver')
+		.or(`sender.eq.${username},receiver.eq.${username}`);
 
-	if (accountsError) {
-		console.error('Error fetching accounts:', accountsError);
+	if (convoError) {
+		console.error('Error fetching conversation users:', convoError);
 	}
 
-	// Get the selected receiver from the URL query parameters
-	const receiver = url.searchParams.get('receiver');
+	// Extract unique usernames (excluding self)
+	const messagedUsernamesSet = new Set<string>();
+	messagedUsernamesData?.forEach((msg) => {
+		if (msg.sender !== username) messagedUsernamesSet.add(msg.sender);
+		if (msg.receiver !== username) messagedUsernamesSet.add(msg.receiver);
+	});
+	const messagedUsernames = Array.from(messagedUsernamesSet);
 
+	// Fetch the actual user accounts for those usernames
+	let accountsdata = [];
+	if (messagedUsernames.length > 0) {
+		const { data: filteredAccounts, error } = await supabaseClient
+			.from('accounts')
+			.select()
+			.in('username', messagedUsernames);
+
+		if (error) {
+			console.error('Error fetching filtered accounts:', error);
+		} else {
+			accountsdata = filteredAccounts ?? [];
+		}
+	}
+
+	// Optional: load messages if a chat is selected
+	const receiver = url.searchParams.get('receiver');
 	let messagesdata = [];
+
 	if (receiver) {
-		// Fetch messages between the current user and the selected receiver
-		const { data, error } = await supabaseClient
+		const { data: messageList, error } = await supabaseClient
 			.from('messages')
 			.select()
-			.or(`sender.eq.${username},receiver.eq.${username}`)
-			.or(`sender.eq.${receiver},receiver.eq.${receiver}`)
-			.order('created_at', { ascending: true }); // Ensure messages are ordered by time
+			.or(`and(sender.eq.${username},receiver.eq.${receiver}),and(sender.eq.${receiver},receiver.eq.${username})`)
+			.order('created_at', { ascending: true });
 
 		if (error) {
 			console.error('Error fetching messages:', error);
 		} else {
-			messagesdata = data ?? []; // Ensure `data` is used
+			messagesdata = messageList ?? [];
 		}
 	}
 
 	return {
-		user: { email: userEmail, username },
-		accounts: accountsdata ?? [],
+		user: { username },
+		accounts: accountsdata,
 		messages: messagesdata,
-		receiver,
+		receiver
 	};
 }
 
@@ -97,7 +107,6 @@ export const actions: Actions = {
 			return;
 		}
 
-		// Insert the message with sender and receiver
 		const { error } = await supabase
 			.from('messages')
 			.insert({ content: message, sender, receiver });

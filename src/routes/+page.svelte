@@ -2,7 +2,6 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { supabaseClient } from '$lib/supabase';
 
-	// Define the types for 'data'
 	type User = {
 		username: string;
 		email: string;
@@ -13,28 +12,27 @@
 		accounts: { username: string }[];
 	};
 
-	// Declare 'data' with the type 'Data | null'
 	export let data: Data | null = null;
 
-	let username: string = ''; // Receiver's username
-	let newMessage = ''; // New message content
-	let messages: Array<any> = []; // Store chat messages
+	let username: string = '';
+	let newMessage = '';
+	let messages: Array<any> = [];
 
-	// Change to the selected DM conversation
+	let showLogoutModal = false;
+	let isLoggingOut = false;
+	let logoutButton: HTMLButtonElement;
+
 	function changeDM(clickedUsername: string) {
 		username = clickedUsername;
-		messages = []; // Clear messages when switching DMs
+		messages = [];
 		console.log('Changed DM to:', clickedUsername);
-		fetchMessages(); // Fetch messages for the new selected user
+		fetchMessages();
 	}
 
-	// Function to send a message
 	async function sendMessage() {
 		if (!newMessage || !username) return;
 
 		const content = newMessage;
-
-		// Send the message to the server (Supabase)
 		const formData = new FormData();
 		formData.append('message', content);
 		formData.append('receiver', username);
@@ -45,35 +43,27 @@
 		});
 
 		if (res.ok) {
-			// Clear the message input after sending
 			newMessage = '';
 		} else {
 			console.error('Message send failed');
 		}
 	}
 
-	// Set up the real-time subscription on mount
 	onMount(() => {
 		if (!data || !data.user) return;
 
-		// Subscribe to real-time updates for messages
 		const channel = supabaseClient
 			.channel('messages')
 			.on(
 				'postgres_changes',
 				{ event: 'INSERT', schema: 'public', table: 'messages' },
 				(payload) => {
-					console.log('New post received:', payload.new);
-
-					// Add the new message to the chat if it's relevant to the current conversation
 					const msg = payload.new;
 					if (
 						(msg.sender === data.user.username && msg.receiver === username) ||
 						(msg.sender === username && msg.receiver === data.user.username)
 					) {
-						// Ensure the message doesn't already exist in the current conversation
 						if (!messages.some((m) => m.id === msg.id)) {
-							// Add the new message to the bottom of the list
 							messages = [...messages, msg];
 						}
 					}
@@ -81,38 +71,49 @@
 			)
 			.subscribe();
 
-		// Cleanup on unmount
 		onDestroy(() => {
 			supabaseClient.removeChannel(channel);
 		});
 	});
 
-	// Fetch messages when the username changes
 	$: if (username) {
-		// Fetch the messages for the selected conversation
 		fetchMessages();
 	}
 
-	// Function to fetch messages for the current conversation
 	async function fetchMessages() {
-		if (!data || !data.user) return; // Guard clause to ensure 'data' is valid
+		if (!data || !data.user) return;
 
 		const { data: messageData, error } = await supabaseClient
 			.from('messages')
 			.select()
 			.or(`sender.eq.${data.user.username},receiver.eq.${data.user.username}`)
 			.or(`sender.eq.${username},receiver.eq.${username}`)
-			.order('created_at', { ascending: true }); // Ensure messages are ordered by time
+			.order('created_at', { ascending: true });
 
 		if (error) {
 			console.error('Error fetching messages:', error);
 		} else {
-			messages = messageData ?? []; // Assign fetched messages
+			messages = messageData ?? [];
 		}
+	}
+
+	function confirmLogout() {
+		showLogoutModal = true;
+	}
+
+	function logout() {
+		isLoggingOut = true;
+		logoutButton?.click(); // triggers form submit to SvelteKit action
 	}
 </script>
 
-<!-- Chat Layout -->
+<!-- Hidden form to submit logout to server -->
+<form method="POST" class="hidden">
+	<input type="hidden" name="logout" value="true" />
+	<button type="submit" bind:this={logoutButton}></button>
+</form>
+
+<!-- Layout -->
 <div class="flex h-screen overflow-hidden bg-gray-50 text-gray-800">
 	<!-- Sidebar -->
 	<aside
@@ -121,39 +122,60 @@
 		<h1 class="mb-6 text-3xl font-extrabold text-green-600">Ibi Chat</h1>
 		<div class="flex flex-col items-center space-y-2">
 			<img src="default.avif" alt="User PFP" class="h-20 w-20 rounded-full border" />
-			<p class="text-lg font-semibold">{data?.user?.email}</p>
+			<p class="text-sm font-medium text-gray-700">{data.user.username}</p>
 		</div>
-		<form method="POST" action="?/logout" class="mt-4 w-full">
-			<button
-				formaction="?/logout"
-				class="w-full rounded-lg bg-red-500 px-4 py-2 font-semibold text-white transition hover:bg-red-600"
-			>
-				Log Out
-			</button>
-		</form>
 
-		<div class="mt-10 max-h-[calc(100vh-6rem)] space-y-4 overflow-y-auto px-4 py-6">
-			<h2 class="mb-4 text-center text-xl font-bold text-gray-700">Conversations</h2>
-			<div class="flex w-full justify-center space-y-2">
-				<div class="w-full max-w-md space-y-4">
-					{#if data}
-						{#each data.accounts as account}
-							{#if account.username !== data?.user?.username}
-								<button
-									class="flex w-full items-center gap-4 rounded-lg bg-white p-4 shadow-sm transition duration-200 ease-in-out hover:bg-gray-100 hover:shadow-lg"
-									onclick={() => changeDM(account.username)}
-								>
-									<img
-										src="default.avif"
-										alt="PFP"
-										class="h-12 w-12 rounded-full border-2 border-gray-300"
-									/>
-									<p class="text-md font-medium text-gray-800">{account.username}</p>
-								</button>
-							{/if}
-						{/each}
-					{/if}
+		<!-- Logout -->
+		<button
+			class="mt-4 w-full rounded-lg bg-red-500 px-4 py-2 font-semibold text-white transition hover:bg-red-600"
+			on:click={confirmLogout}
+		>
+			{#if isLoggingOut}
+				<span class="animate-spin">⏳</span> Logging out...
+			{:else}
+				Log Out
+			{/if}
+		</button>
+
+		<!-- Logout Modal -->
+		{#if showLogoutModal}
+			<div class="bg-opacity-50 fixed inset-0 flex items-center justify-center bg-black">
+				<div class="rounded-lg bg-white p-6 shadow-lg">
+					<h3 class="mb-4 text-xl font-semibold">Are you sure you want to log out?</h3>
+					<div class="flex justify-between">
+						<button
+							class="rounded-lg bg-gray-500 px-4 py-2 text-white"
+							on:click={() => (showLogoutModal = false)}
+						>
+							Cancel
+						</button>
+						<button class="rounded-lg bg-red-500 px-4 py-2 text-white" on:click={logout}>
+							Confirm Logout
+						</button>
+					</div>
 				</div>
+			</div>
+		{/if}
+
+		<!-- Conversation List -->
+		<div class="mt-10 max-h-[calc(100vh-6rem)] space-y-4 overflow-y-auto px-4 py-6">
+			<h2 class="mb-4 text-center text-xl font-bold text-gray-700">Recent Chats</h2>
+			<div class="w-full max-w-md space-y-4">
+				{#each data.accounts as account}
+					{#if account.username !== data.user.username}
+						<button
+							class="flex w-full items-center gap-4 rounded-lg bg-white p-4 shadow-sm transition duration-200 ease-in-out hover:bg-gray-100 hover:shadow-lg"
+							on:click={() => changeDM(account.username)}
+						>
+							<img
+								src="default.avif"
+								alt="PFP"
+								class="h-12 w-12 rounded-full border-2 border-gray-300"
+							/>
+							<p class="text-md font-medium text-gray-800">{account.username}</p>
+						</button>
+					{/if}
+				{/each}
 			</div>
 		</div>
 	</aside>
@@ -177,7 +199,7 @@
 						class="flex-1 rounded-md border border-gray-300 px-4 py-2 focus:border-green-500 focus:ring-green-500"
 					/>
 					<button
-						onclick={sendMessage}
+						on:click={sendMessage}
 						class="rounded-md bg-green-500 px-4 py-2 font-semibold text-white transition hover:bg-green-600"
 					>
 						Send
@@ -189,13 +211,13 @@
 				{#each messages as message (message.id)}
 					<div
 						class={`max-w-[70%] rounded-lg px-4 py-2 text-sm ${
-							message.sender === data?.user?.username
+							message.sender === data.user.username
 								? 'ml-auto bg-green-100 text-right'
 								: 'bg-gray-100 text-left'
 						}`}
 					>
 						<p class="font-semibold">
-							{message.sender === data?.user?.username ? 'You' : message.sender}
+							{message.sender === data.user.username ? 'You' : message.sender}
 						</p>
 						<p>{message.content}</p>
 					</div>
