@@ -34,6 +34,22 @@ export async function load({ locals, url }: RequestEvent) {
 		if (msg.receiver !== username) messagedUsernamesSet.add(msg.receiver);
 	});
 	const messagedUsernames = Array.from(messagedUsernamesSet);
+	// Map to hold latest message per conversation
+const latestMessagesMap = new Map<string, { content: string; created_at: string }>();
+
+for (const otherUser of messagedUsernames) {
+	const { data: latestMessage } = await supabaseClient
+		.from('messages')
+		.select('content, created_at')
+		.or(`and(sender.eq.${username},receiver.eq.${otherUser}),and(sender.eq.${otherUser},receiver.eq.${username})`)
+		.order('created_at', { ascending: false })
+		.limit(1)
+		.single();
+
+	if (latestMessage) {
+		latestMessagesMap.set(otherUser, latestMessage);
+	}
+}
 
 	// Fetch the actual user accounts for those usernames
 	let accountsdata = [];
@@ -46,8 +62,12 @@ export async function load({ locals, url }: RequestEvent) {
 		if (error) {
 			console.error('Error fetching filtered accounts:', error);
 		} else {
-			accountsdata = filteredAccounts ?? [];
-		}
+			accountsdata = (filteredAccounts ?? []).map((acc) => ({
+				...acc,
+				latestMessage: latestMessagesMap.get(acc.username)?.content ?? '',
+				latestTime: latestMessagesMap.get(acc.username)?.created_at ?? ''
+			}));
+					}
 	}
 
 	// Optional: load messages if a chat is selected

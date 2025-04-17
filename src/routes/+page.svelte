@@ -1,15 +1,23 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import { supabaseClient } from '$lib/supabase';
+	import dayjs from 'dayjs';
+	import relativeTime from 'dayjs/plugin/relativeTime';
+	dayjs.extend(relativeTime);
 
 	type User = {
 		username: string;
 		email: string;
 	};
+	type Account = {
+		username: string;
+		latestMessage?: string;
+		latestTime?: string;
+	};
 
 	type Data = {
 		user: User;
-		accounts: { username: string }[];
+		accounts: Account[];
 	};
 
 	export let data: Data | null = null;
@@ -22,13 +30,18 @@
 	let isLoggingOut = false;
 	let logoutButton: HTMLButtonElement;
 
+	// Initialize as empty until a conversation is clicked
+	let isFetchingMessages = false;
+
+	// Change the direct message to the clicked user's username
 	function changeDM(clickedUsername: string) {
 		username = clickedUsername;
-		messages = [];
-		console.log('Changed DM to:', clickedUsername);
-		fetchMessages();
+		messages = []; // Clear current messages
+		isFetchingMessages = true; // Flag to prevent duplicate fetch
+		fetchMessages(username); // Fetch messages for the clicked user
 	}
 
+	// Send a message to the selected user
 	async function sendMessage() {
 		if (!newMessage || !username) return;
 
@@ -49,6 +62,35 @@
 		}
 	}
 
+	// Fetch messages for the selected user
+	async function fetchMessages(otherUsername: string) {
+		const res = await fetch(`/api/messages?other=${otherUsername}`);
+		const data = await res.json();
+
+		if (res.ok) {
+			messages = data;
+		} else {
+			console.error(data.error);
+		}
+
+		// Set isFetchingMessages to false after fetching
+		isFetchingMessages = false;
+	}
+
+	// Handle the login/logout flow
+	async function logout() {
+		isLoggingOut = true;
+		await supabaseClient.auth.signOut();
+		isLoggingOut = false;
+		showLogoutModal = false;
+	}
+
+	// Confirm logout action
+	function confirmLogout() {
+		showLogoutModal = true;
+	}
+
+	// Observe changes for new messages and update messages in real-time
 	onMount(() => {
 		if (!data || !data.user) return;
 
@@ -75,43 +117,7 @@
 			supabaseClient.removeChannel(channel);
 		});
 	});
-
-	$: if (username) {
-		fetchMessages();
-	}
-
-	async function fetchMessages() {
-		if (!data || !data.user) return;
-
-		const { data: messageData, error } = await supabaseClient
-			.from('messages')
-			.select()
-			.or(`sender.eq.${data.user.username},receiver.eq.${data.user.username}`)
-			.or(`sender.eq.${username},receiver.eq.${username}`)
-			.order('created_at', { ascending: true });
-
-		if (error) {
-			console.error('Error fetching messages:', error);
-		} else {
-			messages = messageData ?? [];
-		}
-	}
-
-	function confirmLogout() {
-		showLogoutModal = true;
-	}
-
-	function logout() {
-		isLoggingOut = true;
-		logoutButton?.click(); // triggers form submit to SvelteKit action
-	}
 </script>
-
-<!-- Hidden form to submit logout to server -->
-<form method="POST" class="hidden">
-	<input type="hidden" name="logout" value="true" />
-	<button type="submit" bind:this={logoutButton}></button>
-</form>
 
 <!-- Layout -->
 <div class="flex h-screen overflow-hidden bg-gray-50 text-gray-800">
@@ -122,7 +128,7 @@
 		<h1 class="mb-6 text-3xl font-extrabold text-green-600">Ibi Chat</h1>
 		<div class="flex flex-col items-center space-y-2">
 			<img src="default.avif" alt="User PFP" class="h-20 w-20 rounded-full border" />
-			<p class="text-sm font-medium text-gray-700">{data.user.username}</p>
+			<p class="text-sm font-medium text-gray-700">{data?.user?.username}</p>
 		</div>
 
 		<!-- Logout -->
@@ -161,21 +167,24 @@
 		<div class="mt-10 max-h-[calc(100vh-6rem)] space-y-4 overflow-y-auto px-4 py-6">
 			<h2 class="mb-4 text-center text-xl font-bold text-gray-700">Recent Chats</h2>
 			<div class="w-full max-w-md space-y-4">
-				{#each data.accounts as account}
-					{#if account.username !== data.user.username}
-						<button
-							class="flex w-full items-center gap-4 rounded-lg bg-white p-4 shadow-sm transition duration-200 ease-in-out hover:bg-gray-100 hover:shadow-lg"
-							on:click={() => changeDM(account.username)}
-						>
-							<img
-								src="default.avif"
-								alt="PFP"
-								class="h-12 w-12 rounded-full border-2 border-gray-300"
-							/>
-							<p class="text-md font-medium text-gray-800">{account.username}</p>
-						</button>
-					{/if}
-				{/each}
+				{#if data && data.accounts && data.user}
+					{#each data.accounts as account}
+						{#if account.username !== data.user.username}
+							<button
+								class="flex w-full flex-col items-start gap-2 rounded-lg bg-white p-4 shadow-sm transition hover:bg-gray-100 hover:shadow-lg"
+								on:click={() => changeDM(account.username)}
+							>
+								<div class="flex w-full items-center justify-between">
+									<p class="font-medium text-gray-800">{account.username}</p>
+									{#if account.latestTime}
+										<p class="text-xs text-gray-400">{dayjs(account.latestTime).fromNow()}</p>
+									{/if}
+								</div>
+								<p class="truncate text-sm text-gray-600">{account.latestMessage}</p>
+							</button>
+						{/if}
+					{/each}
+				{/if}
 			</div>
 		</div>
 	</aside>
@@ -211,15 +220,16 @@
 				{#each messages as message (message.id)}
 					<div
 						class={`max-w-[70%] rounded-lg px-4 py-2 text-sm ${
-							message.sender === data.user.username
+							message.sender === data?.user?.username
 								? 'ml-auto bg-green-100 text-right'
 								: 'bg-gray-100 text-left'
 						}`}
 					>
 						<p class="font-semibold">
-							{message.sender === data.user.username ? 'You' : message.sender}
+							{message.sender === data?.user?.username ? 'You' : message.sender}
 						</p>
 						<p>{message.content}</p>
+						<p class="mt-1 text-xs text-gray-500">{dayjs(message.created_at).fromNow()}</p>
 					</div>
 				{/each}
 			</div>
