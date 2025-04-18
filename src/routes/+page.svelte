@@ -4,6 +4,27 @@
 	import dayjs from 'dayjs';
 	import relativeTime from 'dayjs/plugin/relativeTime';
 	dayjs.extend(relativeTime);
+	let conversationMessages = [];
+	let loading = true;
+
+	async function loadMessages(conversationId) {
+		loading = true; // Show loading state
+		try {
+			const res = await fetch(`/api/messages?conversationId=${conversationId}`);
+			if (res.ok) {
+				const newMessages = await res.json();
+				conversationMessages = newMessages;
+			} else {
+				console.error('Failed to load messages');
+			}
+		} catch (error) {
+			console.error('Error fetching messages:', error);
+		} finally {
+			loading = false;
+		}
+	}
+
+	let isSending = false; // Track if a message is being sent
 
 	type User = {
 		username: string;
@@ -35,46 +56,65 @@
 
 	// Change the direct message to the clicked user's username
 	function changeDM(clickedUsername: string) {
-		username = clickedUsername;
-		messages = []; // Clear current messages
-		isFetchingMessages = true; // Flag to prevent duplicate fetch
-		fetchMessages(username); // Fetch messages for the clicked user
+		if (clickedUsername !== username) {
+			username = clickedUsername;
+			isFetchingMessages = true; // Start loading
+			messages = []; // Clear the current messages to avoid duplication
+			fetchMessages(clickedUsername); // Fetch new messages
+		}
 	}
 
 	// Send a message to the selected user
 	async function sendMessage() {
-		if (!newMessage || !username) return;
+		if (isSending) return; // Prevent multiple clicks
 
-		const content = newMessage;
-		const formData = new FormData();
-		formData.append('message', content);
-		formData.append('receiver', username);
+		if (!newMessage || !username) return; // Ensure there is a message and username
 
-		const res = await fetch('?/sendMessage', {
-			method: 'POST',
-			body: formData
-		});
+		isSending = true; // Set sending state to true
 
-		if (res.ok) {
-			newMessage = '';
-		} else {
-			console.error('Message send failed');
+		try {
+			const content = newMessage;
+			const formData = new FormData();
+			formData.append('message', content);
+			formData.append('receiver', username);
+
+			const res = await fetch('?/' + new URLSearchParams({ sendMessage: '' }), {
+				method: 'POST',
+				body: formData
+			});
+
+			if (res.ok) {
+				// Handle success (clear the input message and optionally update the UI)
+				newMessage = ''; // Clear input message after successful send
+				// Optionally update the UI with the new message here
+			} else {
+				console.error('Message send failed');
+				// Optionally show an error message to the user
+			}
+		} catch (error) {
+			console.error('Error sending message:', error);
+			// Optionally show an error message to the user
+		} finally {
+			isSending = false; // Reset sending state after the message is sent
 		}
 	}
 
 	// Fetch messages for the selected user
 	async function fetchMessages(otherUsername: string) {
-		const res = await fetch(`/api/messages?other=${otherUsername}`);
-		const data = await res.json();
+		try {
+			const res = await fetch(`/api/messages?other=${otherUsername}`);
+			const data = await res.json();
 
-		if (res.ok) {
-			messages = data;
-		} else {
-			console.error(data.error);
+			if (res.ok) {
+				messages = data.messages; // Update messages with new data
+			} else {
+				console.error(data.error); // Handle fetch errors
+			}
+		} catch (error) {
+			console.error('Error fetching messages:', error);
+		} finally {
+			isFetchingMessages = false; // Stop loading once done
 		}
-
-		// Set isFetchingMessages to false after fetching
-		isFetchingMessages = false;
 	}
 
 	// Handle the login/logout flow
@@ -123,7 +163,7 @@
 <div class="flex h-screen overflow-hidden bg-gray-50 text-gray-800">
 	<!-- Sidebar -->
 	<aside
-		class="hidden w-1/4 flex-col items-center justify-center border-r border-gray-200 bg-white p-6 shadow-md md:flex"
+		class="hidden w-1/2 flex-col items-center justify-center border-r border-gray-200 bg-white p-6 shadow-md md:flex"
 	>
 		<h1 class="mb-6 text-3xl font-extrabold text-green-600">Ibi Chat</h1>
 		<div class="flex flex-col items-center space-y-2">
@@ -210,7 +250,31 @@
 					<button
 						on:click={sendMessage}
 						class="rounded-md bg-green-500 px-4 py-2 font-semibold text-white transition hover:bg-green-600"
+						disabled={isSending}
 					>
+						{#if isSending}
+							<!-- Show loading spinner when sending -->
+							<svg
+								class="h-6 w-6 animate-spin"
+								xmlns="http://www.w3.org/2000/svg"
+								viewBox="0 0 24 24"
+								fill="none"
+								stroke="currentColor"
+							>
+								<circle
+									cx="12"
+									cy="12"
+									r="10"
+									stroke-width="4"
+									stroke="currentColor"
+									opacity=".25"
+								/>
+								<path d="M4 12a8 8 0 1 1 16 0A8 8 0 0 1 4 12Z" fill="currentColor" />
+							</svg>
+						{:else}
+							Send
+						{/if}
+
 						Send
 					</button>
 				</div>
@@ -236,3 +300,6 @@
 		{/if}
 	</main>
 </div>
+
+<style>
+</style>
