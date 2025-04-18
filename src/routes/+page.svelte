@@ -3,11 +3,12 @@
 	import { supabaseClient } from '$lib/supabase';
 	import dayjs from 'dayjs';
 	import relativeTime from 'dayjs/plugin/relativeTime';
+	import { redirect } from '@sveltejs/kit';
 	dayjs.extend(relativeTime);
 	let conversationMessages = [];
 	let loading = true;
 
-	async function loadMessages(conversationId) {
+	async function loadMessages(conversationId: string) {
 		loading = true; // Show loading state
 		try {
 			const res = await fetch(`/api/messages?conversationId=${conversationId}`);
@@ -120,9 +121,23 @@
 	// Handle the login/logout flow
 	async function logout() {
 		isLoggingOut = true;
-		await supabaseClient.auth.signOut();
-		isLoggingOut = false;
-		showLogoutModal = false;
+		try {
+			// Log out from Supabase
+			const { error } = await supabaseClient.auth.signOut();
+
+			if (error) {
+				console.error('Error during logout:', error);
+				return;
+			}
+
+			// Redirect to login page after successful logout
+			showLogoutModal = false;
+			isLoggingOut = false;
+			throw redirect(303, '/auth/login');
+		} catch (error) {
+			console.error('Logout failed:', error);
+			isLoggingOut = false;
+		}
 	}
 
 	// Confirm logout action
@@ -195,9 +210,11 @@
 						>
 							Cancel
 						</button>
-						<button class="rounded-lg bg-red-500 px-4 py-2 text-white" on:click={logout}>
-							Confirm Logout
-						</button>
+						<form method="POST" action="?/logout">
+							<button type="submit" class="rounded-lg bg-red-500 px-4 py-2 text-white">
+								Confirm Logout
+							</button>
+						</form>
 					</div>
 				</div>
 			</div>
