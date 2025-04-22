@@ -9,13 +9,26 @@ export async function GET({ url, locals }: RequestEvent) {
 		return json({ error: 'Missing parameters' }, { status: 400 });
 	}
 
-	const username = currentUser.username;
+	// Get the username from the accounts table using currentUser.email
+	const { data: userData, error: userError } = await supabaseClient
+		.from('accounts')
+		.select('username')
+		.eq('email', currentUser.email)
+		.single();
 
+	if (userError || !userData) {
+		console.error('User lookup failed', userError);
+		return json({ error: 'User not found in accounts table' }, { status: 500 });
+	}
+
+	const username = userData.username;
+
+	// Get all messages where either participant is the current user or the other user
 	const { data, error } = await supabaseClient
 		.from('messages')
 		.select('*')
-		.or(`sender.eq.${username},recipient.eq.${username}`)
-		.or(`sender.eq.${otherUsername},recipient.eq.${otherUsername}`)
+		.or(`sender.eq.${username},receiver.eq.${username}`)
+		.or(`sender.eq.${otherUsername},receiver.eq.${otherUsername}`)
 		.order('created_at', { ascending: true });
 
 	if (error) {
@@ -23,11 +36,11 @@ export async function GET({ url, locals }: RequestEvent) {
 		return json({ error: 'Failed to fetch messages' }, { status: 500 });
 	}
 
-	// Filter messages that are between currentUser and otherUser
-	const filtered = data.filter(
+	// Only return messages between the current user and the other user
+	const filtered = data?.filter(
 		(msg) =>
-			(msg.sender === username && msg.recipient === otherUsername) ||
-			(msg.sender === otherUsername && msg.recipient === username)
+			(msg.sender === username && msg.receiver === otherUsername) ||
+			(msg.sender === otherUsername && msg.receiver === username)
 	);
 
 	return json({ messages: filtered });
