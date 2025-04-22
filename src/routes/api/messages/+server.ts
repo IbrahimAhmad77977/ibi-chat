@@ -12,15 +12,23 @@ export async function GET({ url, locals }: RequestEvent) {
 	const username = currentUser.username;
 
 	const { data, error } = await supabaseClient
-  .from('messages')
-  .select('*')
-  .order('created_at', { ascending: true });
-
+		.from('messages')
+		.select('*')
+		.or(`sender.eq.${username},recipient.eq.${username}`)
+		.or(`sender.eq.${otherUsername},recipient.eq.${otherUsername}`)
+		.order('created_at', { ascending: true });
 
 	if (error) {
 		console.error(error);
 		return json({ error: 'Failed to fetch messages' }, { status: 500 });
 	}
 
-	return json({ messages: data });
+	// Filter messages that are between currentUser and otherUser
+	const filtered = data.filter(
+		(msg) =>
+			(msg.sender === username && msg.recipient === otherUsername) ||
+			(msg.sender === otherUsername && msg.recipient === username)
+	);
+
+	return json({ messages: filtered });
 }
