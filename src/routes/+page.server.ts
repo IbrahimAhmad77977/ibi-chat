@@ -143,5 +143,90 @@ export const actions: Actions = {
 		} else {
 			console.log('Message sent successfully');
 		}
+	},
+	
+	updateUsername: async ({ request, locals: { supabase } }) => {
+		const formData = await request.formData();
+		const newUsername = formData.get('username') as string;
+	
+		// Validate
+		if (!newUsername || newUsername.trim() === '') {
+			console.error('Invalid username');
+			return { success: false, message: 'Username cannot be empty.' };
+		}
+	
+		// Get current user email
+		const { data: userData, error: authError } = await supabase.auth.getUser();
+		if (authError || !userData?.user?.email) {
+			console.error('Error fetching user from auth');
+			return { success: false, message: 'Authentication error.' };
+		}
+		const userEmail = userData.user.email;
+	
+		// Fetch old username
+		const { data: accountData, error: accountError } = await supabaseClient
+			.from('accounts')
+			.select('username')
+			.eq('email', userEmail)
+			.single();
+	
+		if (accountError || !accountData?.username) {
+			console.error('Error fetching account data', accountError);
+			return { success: false, message: 'Failed to fetch current username.' };
+		}
+	
+		const oldUsername = accountData.username;
+		const { data: existingUser, error: checkError } = await supabaseClient
+		.from('accounts')
+		.select('username')
+		.eq('username', newUsername)
+		.single();
+
+	if (checkError && checkError.code !== 'PGRST116') { // Ignore "no rows" error
+		console.error('Error checking for existing username', checkError);
+		return { success: false, message: 'Failed to validate username.' };
 	}
-};
+
+	if (existingUser && existingUser.username !== oldUsername) {
+		// Username exists and is NOT owned by current user
+		return { success: false, message: 'Username is already taken.' };
+	}
+
+		// 1. Update 'accounts' table
+		const { error: updateAccountError } = await supabaseClient
+			.from('accounts')
+			.update({ username: newUsername })
+			.eq('email', userEmail);
+	
+		if (updateAccountError) {
+			console.error('Error updating account username:', updateAccountError);
+			return { success: false, message: 'Failed to update username.' };
+		}
+	
+		// 2. Update 'messages' sender field
+		const { error: updateSenderError } = await supabaseClient
+			.from('messages')
+			.update({ sender: newUsername })
+			.eq('sender', oldUsername);
+	
+		if (updateSenderError) {
+			console.error('Error updating messages sender:', updateSenderError);
+			return { success: false, message: 'Failed to update messages sender.' };
+		}
+	
+		// 3. Update 'messages' receiver field
+		const { error: updateReceiverError } = await supabaseClient
+			.from('messages')
+			.update({ receiver: newUsername })
+			.eq('receiver', oldUsername);
+	
+		if (updateReceiverError) {
+			console.error('Error updating messages receiver:', updateReceiverError);
+			return { success: false, message: 'Failed to update messages receiver.' };
+		}
+	
+		console.log('Username and message references updated successfully.');
+		return { success: true, message: 'Username updated successfully!' };
+	}
+	};
+

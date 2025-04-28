@@ -7,6 +7,13 @@
 	dayjs.extend(relativeTime);
 	let conversationMessages = [];
 	let loading = true;
+	let showForm = false;
+	export let form: any;
+
+	const handleClick = () => {
+		console.log('Button clicked!'); // Debugging log to confirm click
+		showForm = true; // Toggle form visibility
+	};
 
 	async function loadMessages(conversationId: string) {
 		loading = true; // Show loading state
@@ -182,6 +189,35 @@
 			<h1 class="text-2xl font-extrabold text-[#25D366]">Ibi Chat</h1>
 			<img src="default.avif" alt="User PFP" class="h-16 w-16 rounded-full border" />
 			<p class="text-sm font-medium text-[#111B21]">{data?.user?.username}</p>
+			<button on:click={handleClick} aria-label="Change Username">
+				<img src="settings_button.png" alt="Settings Button" width="50" height="100" />
+			</button>
+			{#if showForm}
+				<!-- Username input form that appears when the button is clicked -->
+				<form method="POST" action="?/updateUsername">
+					<div class="flex flex-col items-center gap-4">
+						<label for="username" class="text-sm font-medium">New Username:</label>
+						<input
+							type="text"
+							id="username"
+							name="username"
+							required
+							class="rounded-full border border-gray-300 px-4 py-2 text-sm focus:ring-2 focus:ring-[#25D366] focus:outline-none"
+						/>
+						<button
+							type="submit"
+							class="mt-2 rounded-full bg-[#25D366] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1DA851] disabled:opacity-50"
+						>
+							Change Username
+						</button>
+					</div>
+					{#if form?.message}
+						<p style="color: {form.success ? 'green' : 'red'};">
+							{form.message}
+						</p>
+					{/if}
+				</form>
+			{/if}
 		</div>
 
 		<!-- Recent Chats -->
