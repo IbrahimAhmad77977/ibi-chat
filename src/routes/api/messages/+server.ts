@@ -9,10 +9,10 @@ export async function GET({ url, locals }: RequestEvent) {
 		return json({ error: 'Missing parameters' }, { status: 400 });
 	}
 
-	// Get the username from the accounts table using currentUser.email
+	// Get current user's account ID
 	const { data: userData, error: userError } = await supabaseClient
 		.from('accounts')
-		.select('username')
+		.select('id')
 		.eq('email', currentUser.email)
 		.single();
 
@@ -21,27 +21,35 @@ export async function GET({ url, locals }: RequestEvent) {
 		return json({ error: 'User not found in accounts table' }, { status: 500 });
 	}
 
-	const username = userData.username;
+	const currentUserId = userData.id;
 
-	// Get all messages where either participant is the current user or the other user
+	// Get other user's account ID by username
+	const { data: otherData, error: otherError } = await supabaseClient
+		.from('accounts')
+		.select('id')
+		.eq('username', otherUsername)
+		.single();
+
+	if (otherError || !otherData) {
+		console.error('Other user lookup failed', otherError);
+		return json({ error: 'Other user not found in accounts table' }, { status: 500 });
+	}
+
+	const otherUserId = otherData.id;
+
+	// Get messages where sender/receiver match current and other user
 	const { data, error } = await supabaseClient
 		.from('messages')
 		.select('*')
-		.or(`sender.eq.${username},receiver.eq.${username}`)
-		.or(`sender.eq.${otherUsername},receiver.eq.${otherUsername}`)
+		.or(
+			`and(sender_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUserId})`
+		)
 		.order('created_at', { ascending: true });
 
 	if (error) {
-		console.error(error);
+		console.error('Message fetch failed', error);
 		return json({ error: 'Failed to fetch messages' }, { status: 500 });
 	}
 
-	// Only return messages between the current user and the other user
-	const filtered = data?.filter(
-		(msg) =>
-			(msg.sender === username && msg.receiver === otherUsername) ||
-			(msg.sender === otherUsername && msg.receiver === username)
-	);
-
-	return json({ messages: filtered });
+	return json({ messages: data });
 }

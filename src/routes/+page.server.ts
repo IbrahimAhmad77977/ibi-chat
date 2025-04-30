@@ -3,6 +3,18 @@ import type { Actions } from './$types';
 import { supabaseClient } from '$lib/supabase';
 import type { RequestEvent } from '@sveltejs/kit';
 
+type Message = {
+	content: string;
+	created_at: string;
+};
+
+type Account = {
+	id: string;
+	username: string;
+	latestMessage?: string;
+	latestTime?: string;
+};
+
 export async function load({ locals, url }: RequestEvent) {
 	const { data: userData } = await locals.supabase.auth.getUser();
 	const userEmail = userData?.user?.email;
@@ -11,74 +23,80 @@ export async function load({ locals, url }: RequestEvent) {
 
 	const { data: accountData } = await supabaseClient
 		.from('accounts')
-		.select('username')
+		.select('id, username')
 		.eq('email', userEmail)
 		.single();
 
-	const username = accountData?.username;
+	if (!accountData) {
+		throw redirect(303, '/auth/login');
+	}
 
-	// Fetch users the current user has exchanged messages with
-	const { data: messagedUsernamesData, error: convoError } = await supabaseClient
+	const currentUserId = accountData.id;
+	const username = accountData.username;
+
+	const { data: messagedIdsData, error: convoError } = await supabaseClient
 		.from('messages')
-		.select('sender, receiver')
-		.or(`sender.eq.${username},receiver.eq.${username}`);
+		.select('sender_id, receiver_id')
+		.or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
 
 	if (convoError) {
-		console.error('Error fetching conversation users:', convoError);
+		console.error('Error fetching conversation user IDs:', convoError);
 	}
 
-	// Extract unique usernames (excluding self)
-	const messagedUsernamesSet = new Set<string>();
-	messagedUsernamesData?.forEach((msg) => {
-		if (msg.sender !== username) messagedUsernamesSet.add(msg.sender);
-		if (msg.receiver !== username) messagedUsernamesSet.add(msg.receiver);
+	const otherUserIdSet = new Set<string>();
+	messagedIdsData?.forEach((msg) => {
+		if (msg.sender_id !== currentUserId) otherUserIdSet.add(msg.sender_id);
+		if (msg.receiver_id !== currentUserId) otherUserIdSet.add(msg.receiver_id);
 	});
-	const messagedUsernames = Array.from(messagedUsernamesSet);
-	// Map to hold latest message per conversation
-const latestMessagesMap = new Map<string, { content: string; created_at: string }>();
+	const otherUserIds = Array.from(otherUserIdSet);
 
-for (const otherUser of messagedUsernames) {
-	const { data: latestMessage } = await supabaseClient
-		.from('messages')
-		.select('content, created_at')
-		.or(`and(sender.eq.${username},receiver.eq.${otherUser}),and(sender.eq.${otherUser},receiver.eq.${username})`)
-		.order('created_at', { ascending: false })
-		.limit(1)
-		.single();
+	const latestMessagesMap = new Map<string, Message>();
 
-	if (latestMessage) {
-		latestMessagesMap.set(otherUser, latestMessage);
+	for (const otherUserId of otherUserIds) {
+		const { data: latestMessage } = await supabaseClient
+			.from('messages')
+			.select('content, created_at')
+			.or(
+				`and(sender_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUserId})`
+			)
+			.order('created_at', { ascending: false })
+			.limit(1)
+			.single();
+
+		if (latestMessage) {
+			latestMessagesMap.set(otherUserId, latestMessage);
+		}
 	}
-}
 
-	// Fetch the actual user accounts for those usernames
-	let accountsdata = [];
-	if (messagedUsernames.length > 0) {
+	let accountsdata: Account[] = [];
+
+	if (otherUserIds.length > 0) {
 		const { data: filteredAccounts, error } = await supabaseClient
 			.from('accounts')
-			.select()
-			.in('username', messagedUsernames);
+			.select('id, username')
+			.in('id', otherUserIds);
 
 		if (error) {
 			console.error('Error fetching filtered accounts:', error);
 		} else {
 			accountsdata = (filteredAccounts ?? []).map((acc) => ({
 				...acc,
-				latestMessage: latestMessagesMap.get(acc.username)?.content ?? '',
-				latestTime: latestMessagesMap.get(acc.username)?.created_at ?? ''
+				latestMessage: latestMessagesMap.get(acc.id)?.content ?? '',
+				latestTime: latestMessagesMap.get(acc.id)?.created_at ?? ''
 			}));
-					}
+		}
 	}
 
-	// Optional: load messages if a chat is selected
-	const receiver = url.searchParams.get('receiver');
+	const receiverId = url.searchParams.get('receiver');
 	let messagesdata = [];
 
-	if (receiver) {
+	if (receiverId) {
 		const { data: messageList, error } = await supabaseClient
 			.from('messages')
 			.select()
-			.or(`and(sender.eq.${username},receiver.eq.${receiver}),and(sender.eq.${receiver},receiver.eq.${username})`)
+			.or(
+				`and(sender_id.eq.${currentUserId},receiver_id.eq.${receiverId}),and(sender_id.eq.${receiverId},receiver_id.eq.${currentUserId})`
+			)
 			.order('created_at', { ascending: true });
 
 		if (error) {
@@ -89,10 +107,10 @@ for (const otherUser of messagedUsernames) {
 	}
 
 	return {
-		user: { username },
+		user: { id: currentUserId, username },
 		accounts: accountsdata,
 		messages: messagesdata,
-		receiver
+		receiver: receiverId
 	};
 }
 
@@ -113,35 +131,142 @@ export const actions: Actions = {
 		throw redirect(303, '/auth/login');
 	},
 	
-	sendMessage: async ({ request, locals: { supabase } }) => {
-		const formData = await request.formData();
-		const message = formData.get('message') as string;
-		const receiver = formData.get('receiver') as string;
-
-		const { data: userData } = await supabase.auth.getUser();
-		const userEmail = userData?.user?.email;
-
-		const { data: accountData } = await supabaseClient
-			.from('accounts')
-			.select('username')
-			.eq('email', userEmail)
-			.single();
-
-		const sender = accountData?.username;
-
-		if (!message || !receiver || !sender) {
-			console.error('Missing fields in sendMessage');
-			return;
-		}
-
-		const { error } = await supabase
-			.from('messages')
-			.insert({ content: message, sender, receiver });
-
-		if (error) {
-			console.error('Send message error:', error);
-		} else {
-			console.log('Message sent successfully');
-		}
-	}
-};
+  sendMessage: async ({ request, locals: { supabase } }) => {
+    const formData = await request.formData();
+    const message = formData.get('message') as string;
+    const receiverUsername = formData.get('receiver') as string;
+  
+    const { data: userData } = await supabase.auth.getUser();
+    const userEmail = userData?.user?.email;
+  
+    if (!message || !receiverUsername || !userEmail) {
+      console.error('Missing fields in sendMessage');
+      return;
+    }
+  
+    // Fetch sender account info
+    const { data: senderData, error: senderError } = await supabase
+      .from('accounts')
+      .select('id, username')
+      .eq('email', userEmail)
+      .single();
+  
+    if (senderError || !senderData) {
+      console.error('Could not find sender account:', senderError);
+      return;
+    }
+  
+    // Fetch receiver account info
+    const { data: receiverData, error: receiverError } = await supabase
+      .from('accounts')
+      .select('id')
+      .eq('username', receiverUsername)
+      .single();
+  
+    if (receiverError || !receiverData) {
+      console.error('Could not find receiver account:', receiverError);
+      return;
+    }
+  
+    const { error } = await supabase
+      .from('messages')
+      .insert({
+        content: message,
+        sender_id: senderData.id,
+        receiver_id: receiverData.id
+      });
+  
+    if (error) {
+      console.error('Send message error:', error);
+    } else {
+      console.log('Message sent successfully');
+    }
+  },
+    
+  updateUsername: async ({ request, locals: { supabase } }) => {
+    const formData = await request.formData();
+    const newUsername = formData.get('username') as string;
+  
+    // Validate input
+    if (!newUsername || newUsername.trim() === '') {
+      console.error('Invalid username');
+      return { success: false, message: 'Username cannot be empty.' };
+    }
+  
+    // Get current user email
+    const { data: userData, error: authError } = await supabase.auth.getUser();
+    if (authError || !userData?.user?.email) {
+      console.error('Error fetching user from auth');
+      return { success: false, message: 'Authentication error.' };
+    }
+    const userEmail = userData.user.email;
+  
+    // Get user account by email
+    const { data: accountData, error: accountError } = await supabase
+      .from('accounts')
+      .select('id, username')
+      .eq('email', userEmail)
+      .single();
+  
+    if (accountError || !accountData) {
+      console.error('Error fetching account data', accountError);
+      return { success: false, message: 'Failed to fetch account.' };
+    }
+  
+    const { id: userId, username: oldUsername } = accountData;
+  
+    // Check if the new username is already taken by another user
+    const { data: existingUser, error: checkError } = await supabase
+      .from('accounts')
+      .select('id')
+      .eq('username', newUsername)
+      .neq('id', userId)
+      .single();
+  
+    if (checkError && checkError.code !== 'PGRST116') {
+      console.error('Error checking for existing username', checkError);
+      return { success: false, message: 'Failed to validate username.' };
+    }
+  
+    if (existingUser) {
+      return { success: false, message: 'Username is already taken.' };
+    }
+  
+    // ✅ Update accounts table with new username
+    const { error: updateAccountError } = await supabase
+      .from('accounts')
+      .update({ username: newUsername })
+      .eq('id', userId);
+  
+    if (updateAccountError) {
+      console.error('Error updating account username:', updateAccountError);
+      return { success: false, message: 'Failed to update account username.' };
+    }
+  
+    // ✅ Update messages table where sender_id = userId
+    const { error: updateSenderError } = await supabase
+      .from('messages')
+      .update({ sender: newUsername })
+      .eq('sender_id', userId);
+  
+    if (updateSenderError) {
+      console.error('Error updating messages sender:', updateSenderError);
+      return { success: false, message: 'Failed to update messages sender.' };
+    }
+  
+    // ✅ Update messages table where receiver_id = userId
+    const { error: updateReceiverError } = await supabase
+      .from('messages')
+      .update({ receiver: newUsername })
+      .eq('receiver_id', userId);
+  
+    if (updateReceiverError) {
+      console.error('Error updating messages receiver:', updateReceiverError);
+      return { success: false, message: 'Failed to update messages receiver.' };
+    }
+  
+    console.log('Username and related messages updated successfully.');
+    return { success: true, message: 'Username updated successfully!' };
+  }
+  
+}
