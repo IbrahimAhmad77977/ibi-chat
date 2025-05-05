@@ -3,45 +3,34 @@
 	import { supabaseClient } from '$lib/supabase';
 	import dayjs from 'dayjs';
 	import relativeTime from 'dayjs/plugin/relativeTime';
-	import { redirect } from '@sveltejs/kit';
 	dayjs.extend(relativeTime);
-	let conversationMessages = [];
-	let loading = true;
 	let showForm = false;
 	export let form: any;
+	function getUserIdByUsername(username: string): string | undefined {
+		return data?.accounts.find((acc) => acc.username === username)?.id;
+	}
+	function getUsernameById(id: string): string {
+		if (id === data?.user?.id) return data.user.username;
+		return data?.accounts.find((acc) => acc.id === id)?.username ?? 'Unknown';
+	}
 
 	const handleClick = () => {
 		console.log('Button clicked!'); // Debugging log to confirm click
 		showForm = true; // Toggle form visibility
 	};
 
-	async function loadMessages(conversationId: string) {
-		loading = true; // Show loading state
-		try {
-			const res = await fetch(`/api/messages?conversationId=${conversationId}`);
-			if (res.ok) {
-				const newMessages = await res.json();
-				conversationMessages = newMessages;
-			} else {
-				console.error('Failed to load messages');
-			}
-		} catch (error) {
-			console.error('Error fetching messages:', error);
-		} finally {
-			loading = false;
-		}
-	}
-
 	let isSending = false; // Track if a message is being sent
 
 	type User = {
 		username: string;
 		email: string;
+		id: string; // <-- Add this
 	};
 	type Account = {
 		username: string;
 		latestMessage?: string;
 		latestTime?: string;
+		id: string;
 	};
 
 	type Data = {
@@ -125,28 +114,6 @@
 		}
 	}
 
-	// Handle the login/logout flow
-	async function logout() {
-		isLoggingOut = true;
-		try {
-			// Log out from Supabase
-			const { error } = await supabaseClient.auth.signOut();
-
-			if (error) {
-				console.error('Error during logout:', error);
-				return;
-			}
-
-			// Redirect to login page after successful logout
-			showLogoutModal = false;
-			isLoggingOut = false;
-			throw redirect(303, '/auth/login');
-		} catch (error) {
-			console.error('Logout failed:', error);
-			isLoggingOut = false;
-		}
-	}
-
 	// Confirm logout action
 	function confirmLogout() {
 		showLogoutModal = true;
@@ -164,8 +131,8 @@
 				(payload) => {
 					const msg = payload.new;
 					if (
-						(msg.sender === data.user.username && msg.receiver === username) ||
-						(msg.sender === username && msg.receiver === data.user.username)
+						(msg.sender_id === data.user.id && msg.receiver_id === getUserIdByUsername(username)) ||
+						(msg.sender_id === getUserIdByUsername(username) && msg.receiver_id === data.user.id)
 					) {
 						if (!messages.some((m) => m.id === msg.id)) {
 							messages = [...messages, msg];
@@ -305,13 +272,13 @@
 				{#each messages as message (message.id)}
 					<div
 						class={`max-w-[70%] rounded-xl px-4 py-2 text-sm shadow ${
-							message.sender === data?.user?.username
+							message.sender_id === data?.user?.id
 								? 'ml-auto bg-[#DCF8C6] text-right'
 								: 'bg-white text-left'
 						}`}
 					>
 						<p class="font-semibold">
-							{message.sender === data?.user?.username ? 'You' : message.sender}
+							{message.sender_id === data?.user?.id ? 'You' : getUsernameById(message.sender_id)}
 						</p>
 						<p>{message.content}</p>
 						<p class="mt-1 text-xs text-[#667781]">{dayjs(message.created_at).fromNow()}</p>

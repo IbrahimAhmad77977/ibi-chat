@@ -34,21 +34,24 @@ export async function load({ locals, url }: RequestEvent) {
 	const currentUserId = accountData.id;
 	const username = accountData.username;
 
-	const { data: messagedIdsData, error: convoError } = await supabaseClient
-		.from('messages')
-		.select('sender_id, receiver_id')
-		.or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
+// Get all messages where current user is either sender or receiver
+const { data: messagedIdsData, error: convoError } = await supabaseClient
+	.from('messages')
+	.select('sender_id, receiver_id')
+	.or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
 
-	if (convoError) {
-		console.error('Error fetching conversation user IDs:', convoError);
-	}
+if (convoError) {
+	console.error('Error fetching conversation user IDs:', convoError);
+}
 
-	const otherUserIdSet = new Set<string>();
-	messagedIdsData?.forEach((msg) => {
-		if (msg.sender_id !== currentUserId) otherUserIdSet.add(msg.sender_id);
-		if (msg.receiver_id !== currentUserId) otherUserIdSet.add(msg.receiver_id);
-	});
-	const otherUserIds = Array.from(otherUserIdSet);
+// Extract other user IDs from conversations
+const otherUserIdSet = new Set<string>();
+messagedIdsData?.forEach((msg) => {
+	const otherId =
+		msg.sender_id === currentUserId ? msg.receiver_id : msg.sender_id;
+	otherUserIdSet.add(otherId);
+});
+const otherUserIds = Array.from(otherUserIdSet);
 
 	const latestMessagesMap = new Map<string, Message>();
 
@@ -87,7 +90,7 @@ export async function load({ locals, url }: RequestEvent) {
 		}
 	}
 
-	const receiverId = url.searchParams.get('receiver');
+	const receiverId = url.searchParams.get('receiver_id');
 	let messagesdata = [];
 
 	if (receiverId) {
@@ -135,16 +138,17 @@ export const actions: Actions = {
     const formData = await request.formData();
     const message = formData.get('message') as string;
     const receiverUsername = formData.get('receiver') as string;
+    const receiverIdFromForm = formData.get('receiver_id') as string;
   
     const { data: userData } = await supabase.auth.getUser();
     const userEmail = userData?.user?.email;
   
-    if (!message || !receiverUsername || !userEmail) {
+    if (!message || !userEmail || (!receiverUsername && !receiverIdFromForm)) {
       console.error('Missing fields in sendMessage');
       return;
     }
   
-    // Fetch sender account info
+    // Get sender account info
     const { data: senderData, error: senderError } = await supabase
       .from('accounts')
       .select('id, username')
@@ -156,16 +160,25 @@ export const actions: Actions = {
       return;
     }
   
-    // Fetch receiver account info
-    const { data: receiverData, error: receiverError } = await supabase
-      .from('accounts')
-      .select('id')
-      .eq('username', receiverUsername)
-      .single();
+    let receiverId: string | undefined;
   
-    if (receiverError || !receiverData) {
-      console.error('Could not find receiver account:', receiverError);
-      return;
+    if (receiverIdFromForm) {
+      // Use receiver ID directly if provided
+      receiverId = receiverIdFromForm;
+    } else {
+      // Otherwise resolve receiver ID from username
+      const { data: receiverData, error: receiverError } = await supabase
+        .from('accounts')
+        .select('id')
+        .eq('username', receiverUsername)
+        .single();
+  
+      if (receiverError || !receiverData) {
+        console.error('Could not find receiver account:', receiverError);
+        return;
+      }
+  
+      receiverId = receiverData.id;
     }
   
     const { error } = await supabase
@@ -173,7 +186,7 @@ export const actions: Actions = {
       .insert({
         content: message,
         sender_id: senderData.id,
-        receiver_id: receiverData.id
+        receiver_id: receiverId
       });
   
     if (error) {
@@ -182,6 +195,7 @@ export const actions: Actions = {
       console.log('Message sent successfully');
     }
   },
+  
     
   updateUsername: async ({ request, locals: { supabase } }) => {
     const formData = await request.formData();
@@ -242,28 +256,7 @@ export const actions: Actions = {
       console.error('Error updating account username:', updateAccountError);
       return { success: false, message: 'Failed to update account username.' };
     }
-  
-    // ✅ Update messages table where sender_id = userId
-    const { error: updateSenderError } = await supabase
-      .from('messages')
-      .update({ sender: newUsername })
-      .eq('sender_id', userId);
-  
-    if (updateSenderError) {
-      console.error('Error updating messages sender:', updateSenderError);
-      return { success: false, message: 'Failed to update messages sender.' };
-    }
-  
-    // ✅ Update messages table where receiver_id = userId
-    const { error: updateReceiverError } = await supabase
-      .from('messages')
-      .update({ receiver: newUsername })
-      .eq('receiver_id', userId);
-  
-    if (updateReceiverError) {
-      console.error('Error updating messages receiver:', updateReceiverError);
-      return { success: false, message: 'Failed to update messages receiver.' };
-    }
+
   
     console.log('Username and related messages updated successfully.');
     return { success: true, message: 'Username updated successfully!' };
