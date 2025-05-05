@@ -7,6 +7,7 @@
 	dayjs.extend(relativeTime);
 	let conversationMessages = [];
 	let loading = true;
+
 	let showForm = false;
 	export let form: any;
 
@@ -94,14 +95,11 @@
 			if (res.ok) {
 				// Handle success (clear the input message and optionally update the UI)
 				newMessage = ''; // Clear input message after successful send
-				// Optionally update the UI with the new message here
 			} else {
 				console.error('Message send failed');
-				// Optionally show an error message to the user
 			}
 		} catch (error) {
 			console.error('Error sending message:', error);
-			// Optionally show an error message to the user
 		} finally {
 			isSending = false; // Reset sending state after the message is sent
 		}
@@ -156,8 +154,9 @@
 	onMount(() => {
 		if (!data || !data.user) return;
 
+		// Set up a Supabase real-time subscription for the conversation between the current user and selected user
 		const channel = supabaseClient
-			.channel('messages')
+			.channel(`messages`)
 			.on(
 				'postgres_changes',
 				{ event: 'INSERT', schema: 'public', table: 'messages' },
@@ -175,6 +174,7 @@
 			)
 			.subscribe();
 
+		// Clean up the subscription when the component is destroyed
 		onDestroy(() => {
 			supabaseClient.removeChannel(channel);
 		});
