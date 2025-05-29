@@ -1,5 +1,6 @@
 <script lang="ts">
-	// You can pass any dynamic messages if needed, though for now, it's static content
+	import { page } from '$app/stores';
+	$: message = $page.url.searchParams.get('message') ?? 'Something went wrong';
 </script>
 
 <div class="flex min-h-screen items-center justify-center bg-[#ECE5DD] font-sans">
@@ -8,15 +9,7 @@
 	>
 		<h2 class="mb-6 text-center text-3xl font-semibold text-[#111B21]">Auth Error</h2>
 
-		<p class="mb-4 text-lg text-[#667781]">It may be due to one of the following reasons:</p>
-
-		<ul class="list-inside list-disc space-y-4 text-lg text-[#111B21]">
-			<li>Invalid login credentials. Try logging in again with the correct credentials.</li>
-			<li>
-				User already exists. Try creating an account with a different username and/or email address.
-			</li>
-			<li>Server error. Please try again later.</li>
-		</ul>
+		<p class="mb-4 text-lg text-[#D93025]">{message}</p>
 
 		<div class="mt-8 flex justify-center">
 			<a

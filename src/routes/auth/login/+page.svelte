@@ -1,7 +1,12 @@
+<script lang="ts">
+	import { enhance } from '$app/forms';
+</script>
+
 <div class="flex min-h-screen items-center justify-center bg-[#ECE5DD] font-sans">
 	<form
 		method="POST"
 		action="?/login"
+		use:enhance
 		class="flex w-full max-w-md flex-col items-center justify-center rounded-lg border border-[#D1D7DB] bg-white p-8 shadow-md"
 	>
 		<h2 class="mb-4 text-2xl font-semibold text-[#111B21]">Welcome back</h2>
@@ -30,7 +35,7 @@
 
 		<button
 			formaction="?/login"
-			class="mt-2 w-full rounded-lg bg-[#25D366] py-2.5 text-sm font-medium text-white transition duration-200 hover:bg-[#128C7E] focus:ring-2 focus:ring-[#25D366] focus:outline-none"
+			class="mt-2 w-full cursor-pointer rounded-lg bg-[#25D366] py-2.5 text-sm font-medium text-white transition duration-200 hover:bg-[#128C7E] focus:ring-2 focus:ring-[#25D366] focus:outline-none"
 		>
 			Log In
 		</button>

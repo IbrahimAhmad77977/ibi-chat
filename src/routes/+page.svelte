@@ -3,6 +3,7 @@
 	import { supabaseClient } from '$lib/supabase';
 	import dayjs from 'dayjs';
 	import relativeTime from 'dayjs/plugin/relativeTime';
+	import { enhance } from '$app/forms';
 	dayjs.extend(relativeTime);
 	let showForm = false;
 	export let form: any;
@@ -156,12 +157,12 @@
 			<h1 class="text-2xl font-extrabold text-[#25D366]">Ibi Chat</h1>
 			<img src="default.avif" alt="User PFP" class="h-16 w-16 rounded-full border" />
 			<p class="text-sm font-medium text-[#111B21]">{data?.user?.username}</p>
-			<button on:click={handleClick} aria-label="Change Username">
+			<button on:click={handleClick} aria-label="Change Username" class="cursor-pointer">
 				<img src="settings_button.png" alt="Settings Button" width="50" height="100" />
 			</button>
 			{#if showForm}
 				<!-- Username input form that appears when the button is clicked -->
-				<form method="POST" action="?/updateUsername">
+				<form method="POST" action="?/updateUsername" use:enhance>
 					<div class="flex flex-col items-center gap-4">
 						<label for="username" class="text-sm font-medium">New Username:</label>
 						<input
@@ -173,7 +174,7 @@
 						/>
 						<button
 							type="submit"
-							class="mt-2 rounded-full bg-[#25D366] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1DA851] disabled:opacity-50"
+							class="mt-2 cursor-pointer rounded-full bg-[#25D366] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1DA851] disabled:opacity-50"
 						>
 							Change Username
 						</button>
@@ -195,7 +196,7 @@
 					{#each data.accounts as account}
 						{#if account.username !== data.user.username}
 							<button
-								class="w-full rounded-lg bg-white px-4 py-3 text-left shadow-sm hover:bg-[#F0F2F5]"
+								class="w-full cursor-pointer rounded-lg bg-white px-4 py-3 text-left shadow-sm hover:bg-[#F0F2F5]"
 								on:click={() => changeDM(account.username)}
 							>
 								<div class="flex items-center justify-between">
@@ -215,7 +216,7 @@
 		<!-- Logout -->
 		<div class="border-t border-[#D1D7DB] p-4">
 			<button
-				class="w-full rounded-lg bg-red-500 px-4 py-2 font-semibold text-white hover:bg-red-600"
+				class="w-full cursor-pointer rounded-lg bg-red-500 px-4 py-2 font-semibold text-white hover:bg-red-600"
 				on:click={confirmLogout}
 			>
 				{#if isLoggingOut}
@@ -240,14 +241,14 @@
 					</p>
 					<div class="flex justify-between gap-6">
 						<button
-							class="w-full rounded-md border border-[#25D366] bg-transparent px-4 py-2 text-sm font-medium text-[#25D366] transition hover:bg-[#DCF8C6] hover:shadow-md focus:ring-2 focus:ring-[#25D366] focus:outline-none"
+							class="w-full cursor-pointer rounded-md border border-[#25D366] bg-transparent px-4 py-2 text-sm font-medium text-[#25D366] transition hover:bg-[#DCF8C6] hover:shadow-md focus:ring-2 focus:ring-[#25D366] focus:outline-none"
 							on:click={() => (showLogoutModal = false)}
 						>
 							Cancel
 						</button>
-						<form method="POST" action="?/logout">
+						<form method="POST" action="?/logout" use:enhance>
 							<button
-								class="w-full rounded-md bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-600 hover:shadow-md focus:ring-2 focus:ring-red-500 focus:outline-none"
+								class="w-full cursor-pointer rounded-md bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-600 hover:shadow-md focus:ring-2 focus:ring-red-500 focus:outline-none"
 							>
 								Confirm Logout
 							</button>
@@ -269,21 +270,25 @@
 		<!-- Chat Messages -->
 		{#if username}
 			<div class="flex-1 space-y-3 overflow-y-auto pr-2 pb-4">
-				{#each messages as message (message.id)}
-					<div
-						class={`max-w-[70%] rounded-xl px-4 py-2 text-sm shadow ${
-							message.sender_id === data?.user?.id
-								? 'ml-auto bg-[#DCF8C6] text-right'
-								: 'bg-white text-left'
-						}`}
-					>
-						<p class="font-semibold">
-							{message.sender_id === data?.user?.id ? 'You' : getUsernameById(message.sender_id)}
-						</p>
-						<p>{message.content}</p>
-						<p class="mt-1 text-xs text-[#667781]">{dayjs(message.created_at).fromNow()}</p>
-					</div>
-				{/each}
+				{#if isFetchingMessages}
+					<p class="text-center text-gray-500">Loading messages...</p>
+				{:else}
+					{#each messages as message (message.id)}
+						<div
+							class={`max-w-[70%] rounded-xl px-4 py-2 text-sm shadow ${
+								message.sender_id === data?.user?.id
+									? 'ml-auto bg-[#DCF8C6] text-right'
+									: 'bg-white text-left'
+							}`}
+						>
+							<p class="font-semibold">
+								{message.sender_id === data?.user?.id ? 'You' : getUsernameById(message.sender_id)}
+							</p>
+							<p>{message.content}</p>
+							<p class="mt-1 text-xs text-[#667781]">{dayjs(message.created_at).fromNow()}</p>
+						</div>
+					{/each}
+				{/if}
 			</div>
 
 			<!-- Message Input -->
@@ -296,7 +301,7 @@
 				/>
 				<button
 					on:click={sendMessage}
-					class="rounded-full bg-[#25D366] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1DA851] disabled:opacity-50"
+					class="cursor-pointer rounded-full bg-[#25D366] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1DA851] disabled:opacity-50"
 					disabled={isSending}
 				>
 					{#if isSending}
