@@ -155,10 +155,16 @@
 		<!-- Top user info -->
 		<div class="flex flex-col items-center gap-4 border-b border-[#D1D7DB] p-4">
 			<h1 class="text-2xl font-extrabold text-[#25D366]">Ibi Chat</h1>
-			<img src="default.avif" alt="User PFP" class="h-16 w-16 rounded-full border" />
+			<img src="default.avif" alt="User PFP" class="h-16 w-16 rounded-full" />
 			<p class="text-sm font-medium text-[#111B21]">{data?.user?.username}</p>
 			<button on:click={handleClick} aria-label="Change Username" class="cursor-pointer">
-				<img src="settings_button.png" alt="Settings Button" width="50" height="100" />
+				<img
+					src="settings_button.png"
+					alt="Settings Button"
+					width="50"
+					height="100"
+					class="rounded-full p-2 transition hover:bg-black"
+				/>
 			</button>
 			{#if showForm}
 				<!-- Username input form that appears when the button is clicked -->
@@ -172,18 +178,28 @@
 							required
 							class="rounded-full border border-gray-300 px-4 py-2 text-sm focus:ring-2 focus:ring-[#25D366] focus:outline-none"
 						/>
-						<button
-							type="submit"
-							class="mt-2 cursor-pointer rounded-full bg-[#25D366] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1DA851] disabled:opacity-50"
-						>
-							Change Username
-						</button>
+						<div class="flex gap-2">
+							<button
+								type="submit"
+								class="cursor-pointer rounded-full bg-[#25D366] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1DA851] disabled:opacity-50"
+							>
+								Change Username
+							</button>
+							<!-- New Cancel button -->
+							<button
+								type="button"
+								on:click={() => (showForm = false)}
+								class="cursor-pointer rounded-full bg-gray-300 px-4 py-2 text-sm font-semibold text-[#111B21] hover:bg-gray-400"
+							>
+								Cancel
+							</button>
+						</div>
+						{#if form?.message}
+							<p style="color: {form.success ? 'green' : 'red'};">
+								{form.message}
+							</p>
+						{/if}
 					</div>
-					{#if form?.message}
-						<p style="color: {form.success ? 'green' : 'red'};">
-							{form.message}
-						</p>
-					{/if}
 				</form>
 			{/if}
 		</div>
@@ -241,14 +257,14 @@
 					</p>
 					<div class="flex justify-between gap-6">
 						<button
-							class="w-full cursor-pointer rounded-md border border-[#25D366] bg-transparent px-4 py-2 text-sm font-medium text-[#25D366] transition hover:bg-[#DCF8C6] hover:shadow-md focus:ring-2 focus:ring-[#25D366] focus:outline-none"
+							class=" cursor-pointer rounded-md border border-[#25D366] bg-transparent px-4 py-2 text-sm font-medium text-[#25D366] transition hover:bg-[#DCF8C6] hover:shadow-md focus:ring-2 focus:ring-[#25D366] focus:outline-none"
 							on:click={() => (showLogoutModal = false)}
 						>
 							Cancel
 						</button>
 						<form method="POST" action="?/logout" use:enhance>
 							<button
-								class="w-full cursor-pointer rounded-md bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-600 hover:shadow-md focus:ring-2 focus:ring-red-500 focus:outline-none"
+								class=" cursor-pointer rounded-md bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-600 hover:shadow-md focus:ring-2 focus:ring-red-500 focus:outline-none"
 							>
 								Confirm Logout
 							</button>
@@ -262,8 +278,8 @@
 	<!-- Main Chat Area -->
 	<main class="bg-chat-background flex flex-1 flex-col bg-cover p-4">
 		<!-- Header -->
-		<div class="mb-4 flex items-center gap-3 border-b border-[#D1D7DB] pb-4">
-			<img src="default.avif" alt="Chat PFP" class="h-12 w-12 rounded-full border" />
+		<div class=" flex items-center gap-3 border-b border-[#D1D7DB] bg-white px-4 py-4">
+			<img src="default.avif" alt="Chat PFP" class="h-12 w-12 rounded-full" />
 			<h2 class="text-xl font-bold text-[#111B21]">{username || 'Select a chat'}</h2>
 		</div>
 
