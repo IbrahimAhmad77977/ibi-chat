@@ -1,4 +1,5 @@
 <script lang="ts">
+	let loading = false;
 	import { onMount, onDestroy } from 'svelte';
 	import { supabaseClient } from '$lib/supabase';
 	import dayjs from 'dayjs';
@@ -168,7 +169,18 @@
 			</button>
 			{#if showForm}
 				<!-- Username input form that appears when the button is clicked -->
-				<form method="POST" action="?/updateUsername" use:enhance>
+				<form
+					method="POST"
+					action="?/updateUsername"
+					use:enhance={() => {
+						loading = true;
+
+						return async ({ update }) => {
+							await update();
+							loading = false;
+						};
+					}}
+				>
 					<div class="flex flex-col items-center gap-4">
 						<label for="username" class="text-sm font-medium">New Username:</label>
 						<input
@@ -183,7 +195,11 @@
 								type="submit"
 								class="cursor-pointer rounded-full bg-[#25D366] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1DA851] disabled:opacity-50"
 							>
-								Change Username
+								{#if loading}
+									Changing Username...
+								{:else}
+									Change Username
+								{/if}
 							</button>
 							<!-- New Cancel button -->
 							<button
@@ -262,11 +278,26 @@
 						>
 							Cancel
 						</button>
-						<form method="POST" action="?/logout" use:enhance>
+						<form
+							method="POST"
+							action="?/logout"
+							use:enhance={() => {
+								loading = true;
+
+								return async ({ update }) => {
+									await update();
+									loading = false;
+								};
+							}}
+						>
 							<button
 								class=" cursor-pointer rounded-md bg-red-500 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-600 hover:shadow-md focus:ring-2 focus:ring-red-500 focus:outline-none"
 							>
-								Confirm Logout
+								{#if loading}
+									Logging out...
+								{:else}
+									Confirm Logout
+								{/if}
 							</button>
 						</form>
 					</div>

@@ -1,12 +1,20 @@
 <script>
 	import { enhance } from '$app/forms';
+	let loading = false;
 </script>
 
 <div class="flex min-h-screen items-center justify-center bg-[#ECE5DD] font-sans">
 	<form
 		method="POST"
 		action="?/login"
-		use:enhance
+		use:enhance={() => {
+			loading = true;
+
+			return async ({ update }) => {
+				await update();
+				loading = false;
+			};
+		}}
 		class="hidden w-full max-w-md flex-col items-center justify-center rounded-lg border border-[#D1D7DB] bg-white p-8 shadow-md md:flex"
 	>
 		<h2 class="mb-4 text-2xl font-semibold text-[#111B21]">Create your account</h2>
@@ -49,7 +57,11 @@
 			formaction="?/signup"
 			class="w-full cursor-pointer rounded-lg bg-[#25D366] py-2.5 text-sm font-medium text-white transition duration-200 hover:bg-[#128C7E] focus:ring-2 focus:ring-[#25D366] focus:outline-none"
 		>
-			Sign up
+			{#if loading}
+				Signing in...
+			{:else}
+				Sign In
+			{/if}
 		</button>
 
 		<p class="mt-6 text-center text-sm text-[#667781]">
