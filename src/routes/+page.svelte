@@ -20,6 +20,11 @@
 		console.log('Button clicked!'); // Debugging log to confirm click
 		showForm = true; // Toggle form visibility
 	};
+	let messageForm = false;
+	const SendMessage = () => {
+		console.log('Button clicked');
+		messageForm = true;
+	};
 
 	let isSending = false; // Track if a message is being sent
 
@@ -34,6 +39,23 @@
 		latestTime?: string;
 		id: string;
 	};
+	let sentToIds: Set<string> = new Set();
+
+	async function fetchSentToIds() {
+		if (!data?.user?.id) return;
+
+		const { data: sentMessages, error } = await supabaseClient
+			.from('messages')
+			.select('receiver_id')
+			.eq('sender_id', data.user.id);
+
+		if (error) {
+			console.error('Error fetching sent messages:', error);
+			return;
+		}
+
+		sentToIds = new Set(sentMessages.map((m) => m.receiver_id));
+	}
 
 	type Data = {
 		user: User;
@@ -48,7 +70,6 @@
 
 	let showLogoutModal = false;
 	let isLoggingOut = false;
-	let logoutButton: HTMLButtonElement;
 
 	// Initialize as empty until a conversation is clicked
 	let isFetchingMessages = false;
@@ -65,14 +86,25 @@
 
 	// Send a message to the selected user
 	async function sendMessage() {
-		if (isSending) return; // Prevent multiple clicks
+		if (isSending) return;
+		if (!newMessage || !username) return;
 
-		if (!newMessage || !username) return; // Ensure there is a message and username
+		isSending = true;
+		const tempId = `temp-${Date.now()}`;
+		const tempMessage = {
+			id: tempId,
+			content: newMessage,
+			sender_id: data!.user.id,
+			receiver_id: getUserIdByUsername(username),
+			created_at: new Date().toISOString()
+		};
 
-		isSending = true; // Set sending state to true
+		// Optimistically update UI
+		messages = [...messages, tempMessage];
+		newMessage = '';
 
 		try {
-			const content = newMessage;
+			const content = tempMessage.content;
 			const formData = new FormData();
 			formData.append('message', content);
 			formData.append('receiver', username);
@@ -82,19 +114,22 @@
 				body: formData
 			});
 
-			if (res.ok) {
-				// Handle success (clear the input message and optionally update the UI)
-				newMessage = ''; // Clear input message after successful send
-				// Optionally update the UI with the new message here
-			} else {
-				console.error('Message send failed');
-				// Optionally show an error message to the user
+			if (!res.ok) {
+				throw new Error('Failed to send message');
 			}
+
+			// Assuming server returns the saved message with a real ID
+			const savedMessage = await res.json();
+
+			// Remove temp message and add the saved message
+			messages = messages.filter((m) => m.id !== tempId).concat(savedMessage);
 		} catch (error) {
-			console.error('Error sending message:', error);
-			// Optionally show an error message to the user
+			console.error(error);
+			// Remove the optimistic message on error
+			messages = messages.filter((m) => m.id !== tempId);
+			// Optionally, show an error notification to user
 		} finally {
-			isSending = false; // Reset sending state after the message is sent
+			isSending = false;
 		}
 	}
 
@@ -124,6 +159,7 @@
 	// Observe changes for new messages and update messages in real-time
 	onMount(() => {
 		if (!data || !data.user) return;
+		fetchSentToIds();
 
 		const channel = supabaseClient
 			.channel('messages')
@@ -210,6 +246,7 @@
 								Cancel
 							</button>
 						</div>
+
 						{#if form?.message}
 							<p style="color: {form.success ? 'green' : 'red'};">
 								{form.message}
@@ -217,6 +254,41 @@
 						{/if}
 					</div>
 				</form>
+			{/if}
+			<button
+				on:click={SendMessage}
+				aria-label="Send Message"
+				class="flex cursor-pointer items-center gap-2 rounded bg-blue-600 px-4 py-2 font-semibold text-white shadow-md transition duration-150 hover:bg-blue-700"
+			>
+				Send
+			</button>
+			{#if messageForm}
+				<div class="mt-4 w-full space-y-2">
+					<h3 class="text-sm font-semibold text-[#111B21]">Select a user to message:</h3>
+					{#if data && data.accounts && data.user}
+						{#each data.accounts as account (account.id)}
+							{#if account.id !== data.user.id && !sentToIds.has(account.id)}
+								<button
+									class="w-full rounded bg-gray-100 px-4 py-2 text-left text-sm hover:bg-gray-200"
+									on:click={() => {
+										changeDM(account.username);
+										messageForm = false;
+									}}
+								>
+									{account.username}
+								</button>
+							{/if}
+						{/each}
+					{/if}
+
+					<button
+						type="button"
+						on:click={() => (messageForm = false)}
+						class="mt-2 w-full rounded bg-gray-300 px-4 py-2 text-sm font-semibold text-[#111B21] hover:bg-gray-400"
+					>
+						Cancel
+					</button>
+				</div>
 			{/if}
 		</div>
 
