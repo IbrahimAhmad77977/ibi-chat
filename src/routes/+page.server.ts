@@ -34,62 +34,38 @@ export async function load({ locals, url }: RequestEvent) {
 	const currentUserId = accountData.id;
 	const username = accountData.username;
 
-// Get all messages where current user is either sender or receiver
-const { data: messagedIdsData, error: convoError } = await supabaseClient
-	.from('messages')
-	.select('sender_id, receiver_id')
-	.or(`sender_id.eq.${currentUserId},receiver_id.eq.${currentUserId}`);
+	// ✅ Fetch all accounts except the current user
+	const { data: allAccounts, error: allError } = await supabaseClient
+		.from('accounts')
+		.select('id, username')
+		.neq('id', currentUserId);
 
-if (convoError) {
-	console.error('Error fetching conversation user IDs:', convoError);
-}
-
-// Extract other user IDs from conversations
-const otherUserIdSet = new Set<string>();
-messagedIdsData?.forEach((msg) => {
-	const otherId =
-		msg.sender_id === currentUserId ? msg.receiver_id : msg.sender_id;
-	otherUserIdSet.add(otherId);
-});
-const otherUserIds = Array.from(otherUserIdSet);
-
-	const latestMessagesMap = new Map<string, Message>();
-
-	for (const otherUserId of otherUserIds) {
-		const { data: latestMessage } = await supabaseClient
-			.from('messages')
-			.select('content, created_at')
-			.or(
-				`and(sender_id.eq.${currentUserId},receiver_id.eq.${otherUserId}),and(sender_id.eq.${otherUserId},receiver_id.eq.${currentUserId})`
-			)
-			.order('created_at', { ascending: false })
-			.limit(1)
-			.single();
-
-		if (latestMessage) {
-			latestMessagesMap.set(otherUserId, latestMessage);
-		}
+	if (allError) {
+		console.error('Error fetching all accounts:', allError);
 	}
 
-	let accountsdata: Account[] = [];
+	// ✅ For each account, optionally fetch latest message
+	const accountsdata = await Promise.all(
+		(allAccounts ?? []).map(async (acc) => {
+			const { data: latestMessage } = await supabaseClient
+				.from('messages')
+				.select('content, created_at')
+				.or(
+					`and(sender_id.eq.${currentUserId},receiver_id.eq.${acc.id}),and(sender_id.eq.${acc.id},receiver_id.eq.${currentUserId})`
+				)
+				.order('created_at', { ascending: false })
+				.limit(1)
+				.single();
 
-	if (otherUserIds.length > 0) {
-		const { data: filteredAccounts, error } = await supabaseClient
-			.from('accounts')
-			.select('id, username')
-			.in('id', otherUserIds);
-
-		if (error) {
-			console.error('Error fetching filtered accounts:', error);
-		} else {
-			accountsdata = (filteredAccounts ?? []).map((acc) => ({
+			return {
 				...acc,
-				latestMessage: latestMessagesMap.get(acc.id)?.content ?? '',
-				latestTime: latestMessagesMap.get(acc.id)?.created_at ?? ''
-			}));
-		}
-	}
+				latestMessage: latestMessage?.content ?? '',
+				latestTime: latestMessage?.created_at ?? ''
+			};
+		})
+	);
 
+	// ✅ Get messages with selected receiver (if any)
 	const receiverId = url.searchParams.get('receiver_id');
 	let messagesdata = [];
 
@@ -111,7 +87,7 @@ const otherUserIds = Array.from(otherUserIdSet);
 
 	return {
 		user: { id: currentUserId, username },
-		accounts: accountsdata,
+		accounts: accountsdata,       // ✅ Now includes all users except self
 		messages: messagesdata,
 		receiver: receiverId
 	};

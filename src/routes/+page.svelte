@@ -297,8 +297,8 @@
 			<h2 class="mb-2 text-center text-base font-semibold text-[#667781]">Chats</h2>
 			<div class="space-y-2">
 				{#if data && data.accounts && data.user}
-					{#each data.accounts as account}
-						{#if account.username !== data.user.username}
+					{#each data.accounts as account (account.id)}
+						{#if account.id !== data.user.id && sentToIds.has(account.id)}
 							<button
 								class="w-full cursor-pointer rounded-lg bg-white px-4 py-3 text-left shadow-sm hover:bg-[#F0F2F5]"
 								on:click={() => changeDM(account.username)}
