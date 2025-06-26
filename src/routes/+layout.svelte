@@ -2,16 +2,16 @@
 	import { invalidate } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import '../app.css';
+
 	let { data, children } = $props();
 	console.log('this is the data for the page: ', data);
 
-	let { session, supabase } = $derived(data);
+	let { supabase, user } = $derived(data);
 
 	onMount(() => {
 		const { data } = supabase.auth.onAuthStateChange((_, newSession) => {
-			if (newSession?.expires_at !== session?.expires_at) {
-				invalidate('supabase:auth');
-			}
+			// No session logic, just track auth state change if needed
+			invalidate('supabase:auth');
 		});
 
 		return () => data.subscription.unsubscribe();
