@@ -166,18 +166,46 @@
 			.on(
 				'postgres_changes',
 				{ event: 'INSERT', schema: 'public', table: 'messages' },
-				(payload) => {
+				async (payload) => {
 					const msg = payload.new;
-					if (
+
+					const involvesCurrentUser =
 						(msg.sender_id === data.user.id && msg.receiver_id === getUserIdByUsername(username)) ||
-						(msg.sender_id === getUserIdByUsername(username) && msg.receiver_id === data.user.id)
-					) {
-						if (!messages.some((m) => m.id === msg.id)) {
+						(msg.sender_id === getUserIdByUsername(username) && msg.receiver_id === data.user.id);
+
+					if (involvesCurrentUser) {
+						const alreadyInMessages = messages.some((m) => m.id === msg.id);
+						if (!alreadyInMessages) {
+							// Fetch missing username if needed
+							const senderId = msg.sender_id;
+							const receiverId = msg.receiver_id;
+
+							const allKnownIds = new Set([data.user.id, ...data.accounts.map((acc) => acc.id)]);
+
+							const missingId = !allKnownIds.has(senderId)
+								? senderId
+								: !allKnownIds.has(receiverId)
+									? receiverId
+									: null;
+
+							if (missingId) {
+								const { data: missingAccount } = await supabaseClient
+									.from('accounts')
+									.select('id, username')
+									.eq('id', missingId)
+									.single();
+
+								if (missingAccount) {
+									data.accounts = [...data.accounts, missingAccount];
+								}
+							}
+
 							messages = [...messages, msg];
 						}
 					}
 				}
 			)
+
 			.subscribe();
 
 		onDestroy(() => {
@@ -393,19 +421,23 @@
 					<p class="text-center text-gray-500">Loading messages...</p>
 				{:else}
 					{#each messages as message (message.id)}
-						<div
-							class={`max-w-[70%] rounded-xl px-4 py-2 text-sm shadow ${
-								message.sender_id === data?.user?.id
-									? 'ml-auto bg-[#DCF8C6] text-right'
-									: 'bg-white text-left'
-							}`}
-						>
-							<p class="font-semibold">
-								{message.sender_id === data?.user?.id ? 'You' : getUsernameById(message.sender_id)}
-							</p>
-							<p>{message.content}</p>
-							<p class="mt-1 text-xs text-[#667781]">{dayjs(message.created_at).fromNow()}</p>
-						</div>
+						{#if message.sender_id === data?.user?.id || getUserIdByUsername(message.sender_id)}
+							<div
+								class={`max-w-[70%] rounded-xl px-4 py-2 text-sm shadow ${
+									message.sender_id === data?.user?.id
+										? 'ml-auto bg-[#DCF8C6] text-right'
+										: 'bg-white text-left'
+								}`}
+							>
+								<p class="font-semibold">
+									{message.sender_id === data?.user?.id
+										? 'You'
+										: getUsernameById(message.sender_id)}
+								</p>
+								<p>{message.content}</p>
+								<p class="mt-1 text-xs text-[#667781]">{dayjs(message.created_at).fromNow()}</p>
+							</div>
+						{/if}
 					{/each}
 				{/if}
 			</div>
